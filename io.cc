@@ -23,15 +23,10 @@ limitations under the License.
 #include "gflags/gflags.h"
 #include "glog/logging.h"
 
-#include <map>
-
-static vector<float> feature_means;
-static bool stats_computed = false;
-
-DEFINE_string(data_set, "wdbc",
-              "Name of data set. Required: One of breastcancer, wdbc, ionosphere, "
+DEFINE_string(data_set, "mnist17",
+              "Name of data set. Required: One of breastcancer, wpbc, mnist17, ionosphere, "
               "ocr17, ocr49, ocr17-mnist, ocr49-mnist, diabetes, german.");
-DEFINE_string(data_filename, "./testdata/breast-cancer-wisconsin/wdbc.data",
+DEFINE_string(data_filename, "./testdata/mnist_1_vs_7.data",
               "Filename containing data. Required: data_filename not empty.");
 DEFINE_int32(num_folds, 5,
              "(num_folds - 2)/num_folds of data used for training, 1/num_folds "
@@ -66,51 +61,6 @@ void SplitString(const string &text, char sep, vector<string>* tokens) {
   }
 }
 
-// 计算特征统计信息的函数
-void ComputeFeatureStats(const string& filename) {
-  if (stats_computed) return;
-  
-  // 先确定特征数量
-  std::ifstream file(filename);
-  CHECK(file.is_open()) << "Cannot open file: " << filename;
-  
-  string first_line;
-  std::getline(file, first_line);
-  vector<string> first_values;
-  SplitString(first_line, ',', &first_values);
-  
-  int num_features = first_values.size() - 2; // 减去ID和标签列
-  feature_means.assign(num_features, 0.0);
-  vector<int> feature_counts(num_features, 0);
-  
-  // 重新读取文件计算均值
-  file.clear();
-  file.seekg(0, std::ios::beg);
-  
-  string line;
-  while (std::getline(file, line)) {
-    vector<string> values;
-    SplitString(line, ',', &values);
-    
-    for (int i = 2; i < values.size() && i-2 < num_features; ++i) {
-      if (values[i] != "?" && !values[i].empty()) {
-        feature_means[i-2] += atof(values[i].c_str());
-        feature_counts[i-2]++;
-      }
-    }
-  }
-  
-  // 计算均值
-  for (int i = 0; i < num_features; ++i) {
-    if (feature_counts[i] > 0) {
-      feature_means[i] /= feature_counts[i];
-    }
-  }
-  
-  stats_computed = true;
-  LOG(INFO) << "Computed statistics for " << num_features << " features";
-}
-
 bool ParseLineBreastCancer(const string& line, Example* example) {
   example->values.clear();
   vector<string> values;
@@ -143,7 +93,7 @@ bool ParseLineBreastCancer(const string& line, Example* example) {
   return true;
 }
 
-bool ParseLineWdbc(const string& line, Example* example) {
+bool ParseLineWpbc(const string& line, Example* example) {
   example->values.clear();
   vector<string> values;
   SplitString(line, ',', &values);
@@ -152,18 +102,22 @@ bool ParseLineWdbc(const string& line, Example* example) {
     if (i == 0) {
       continue;  // 跳过ID列
     } else if (i == 1) {
-      // 第二列是标签：B = benign(-1), M = malignant(+1)
-      if (values[i] == "B") {  // Benign
+      // 第二列是标签：N = benign(-1), R = malignant(+1)
+      if (values[i] == "N") {  // No recurrence (benign)
         example->label = -1;
-      } else if (values[i] == "M") {  // Malignant
+      } else if (values[i] == "R") {  // Recurrence (malignant)
         example->label = +1;
       } else {
         LOG(FATAL) << "Unexpected label: " << values[i];
       }
     } else {
-      // 第3-32列是特征（注意：WDBC没有缺失值）
-      float value = atof(values[i].c_str());
-      example->values.push_back(value);
+      // 第3-32列是特征，但需要检查缺失值
+      if (values[i] == "?" || values[i].empty()) {
+        return false;  // 跳过包含缺失值的样本
+      } else {
+        float value = atof(values[i].c_str());
+        example->values.push_back(value);
+      }
     }
   }
   return true;
@@ -316,6 +270,41 @@ bool ParseLinePima(const string& line, Example* example) {
   return true;
 }
 
+// 在io.cc中添加ParseLineMnist函数
+bool ParseLineMnist(const string& line, Example* example) {
+  example->values.clear();
+  vector<string> values;
+  SplitString(line, ',', &values);
+  
+  // 检查数据格式：应该有785列（784特征 + 1标签）
+  if (values.size() != 785) {
+    LOG(WARNING) << "Invalid MNIST line format, expected 785 values, got " 
+                 << values.size();
+    return false;
+  }
+  
+  // 解析784个特征值（前784列）
+  example->values.reserve(784);
+  for (int i = 0; i < 784; ++i) {
+    float pixel_value = atof(values[i].c_str());
+    // 归一化像素值到[0,1]范围
+    example->values.push_back(pixel_value / 255.0);
+  }
+  
+  // 解析标签（最后一列）
+  int label = atoi(values[784].c_str());
+  if (label == 0) {
+    example->label = -1;  // 数字1 -> -1
+  } else if (label == 1) {
+    example->label = +1;  // 数字7 -> +1
+  } else {
+    LOG(WARNING) << "Invalid label: " << label;
+    return false;
+  }
+  
+  example->weight = 1.0;
+  return true;
+}
 
 void ReadData(vector<Example>* train_examples,
               vector<Example>* cv_examples,
@@ -323,8 +312,6 @@ void ReadData(vector<Example>* train_examples,
   train_examples->clear();
   cv_examples->clear();
   test_examples->clear();
-  
-  
   vector<Example> examples;
   std::ifstream file(FLAGS_data_filename);
   CHECK(file.is_open());
@@ -334,8 +321,10 @@ void ReadData(vector<Example>* train_examples,
     bool keep_example;
     if (FLAGS_data_set == "breastcancer") {
       keep_example = ParseLineBreastCancer(line, &example);
-    } else if (FLAGS_data_set == "wdbc") {
-    keep_example = ParseLineWdbc(line, &example);
+    } else if (FLAGS_data_set == "wpbc") {  // 添加这个分支
+      keep_example = ParseLineWpbc(line, &example);
+    } else if (FLAGS_data_set == "mnist17") {  // 新添加
+      keep_example = ParseLineMnist(line, &example);
     } else if (FLAGS_data_set == "ionosphere") {
       keep_example = ParseLineIon(line, &example);
     } else if (FLAGS_data_set == "german") {
@@ -355,10 +344,6 @@ void ReadData(vector<Example>* train_examples,
     }
     if (keep_example) examples.push_back(example);
   }
-  
-  // 打印样本统计信息
-  LOG(INFO) << "Total examples loaded: " << examples.size();
-  
   std::shuffle(examples.begin(), examples.end(), rng);
   std::uniform_real_distribution<double> dist;
   int fold = 0;
@@ -383,5 +368,35 @@ void ReadData(vector<Example>* train_examples,
   for (Example& example : *train_examples) {
     example.weight = initial_wgt;
   }
+
+  // 在return;之前添加这些代码
+  LOG(INFO) << "Dataset statistics:";
+  LOG(INFO) << "Train: " << train_examples->size() << " examples";
+  LOG(INFO) << "CV: " << cv_examples->size() << " examples";
+  LOG(INFO) << "Test: " << test_examples->size() << " examples";
+  
+  if (!train_examples->empty()) {
+    LOG(INFO) << "Feature dimension: " << (*train_examples)[0].values.size();
+    
+    // 统计标签分布
+    int train_pos = 0, train_neg = 0;
+    int cv_pos = 0, cv_neg = 0;
+    int test_pos = 0, test_neg = 0;
+    
+    for (const auto& ex : *train_examples) {
+      if (ex.label == 1) train_pos++; else train_neg++;
+    }
+    for (const auto& ex : *cv_examples) {
+      if (ex.label == 1) cv_pos++; else cv_neg++;
+    }
+    for (const auto& ex : *test_examples) {
+      if (ex.label == 1) test_pos++; else test_neg++;
+    }
+    
+    LOG(INFO) << "Label distribution - Train: +" << train_pos << " / -" << train_neg;
+    LOG(INFO) << "Label distribution - CV: +" << cv_pos << " / -" << cv_neg;
+    LOG(INFO) << "Label distribution - Test: +" << test_pos << " / -" << test_neg;
+  }
+
   return;
 }

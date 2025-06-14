@@ -19,9 +19,6 @@ limitations under the License.
 #include "boost.h"
 #include "io.h"
 #include "types.h"
-#include <chrono>
-#include <sys/resource.h>
-#include <unistd.h>
 
 DECLARE_int32(tree_depth);
 DECLARE_string(data_set);
@@ -32,7 +29,7 @@ DECLARE_int32(fold_to_test);
 DECLARE_double(beta);
 DECLARE_double(lambda);
 DECLARE_string(loss_type);
-DEFINE_int32(num_iter, 17,
+DEFINE_int32(num_iter, 200,
              "Number of boosting iterations. Required: num_iter >= 1.");
 DEFINE_int32(seed, 42,
              "Seed for random number generator. Required: seed >= 0.");
@@ -41,7 +38,8 @@ void ValidateFlags() {
   CHECK_GE(FLAGS_tree_depth, 0);
   CHECK_GE(FLAGS_num_iter, 1);
   CHECK(!FLAGS_data_filename.empty());
-  CHECK(FLAGS_data_set == "breastcancer" || FLAGS_data_set == "wdbc" ||
+  CHECK(FLAGS_data_set == "breastcancer" || FLAGS_data_set == "wpbc" ||
+        FLAGS_data_set == "mnist17" || 
         FLAGS_data_set == "ionosphere" || FLAGS_data_set == "ocr17-mnist" || 
         FLAGS_data_set == "ocr49-mnist" || FLAGS_data_set == "splice" || 
         FLAGS_data_set == "german" || FLAGS_data_set == "ocr17" || 
@@ -57,13 +55,6 @@ void ValidateFlags() {
   CHECK(FLAGS_loss_type == "exponential" || FLAGS_loss_type == "logistic");
 }
 
-// 获取当前内存使用量（KB）
-long getCurrentMemoryUsage() {
-  struct rusage usage;
-  getrusage(RUSAGE_SELF, &usage);
-  return usage.ru_maxrss; // Linux返回KB，macOS返回字节
-}
-
 int main(int argc, char** argv) {
   gflags::ParseCommandLineFlags(&argc, &argv, true);
   google::InitGoogleLogging(argv[0]);
@@ -72,33 +63,12 @@ int main(int argc, char** argv) {
 
   SetSeed(FLAGS_seed);
 
-  // 记录开始时间和内存
-  auto start_time = std::chrono::high_resolution_clock::now();
-  long initial_memory = getCurrentMemoryUsage();
-
   vector<Example> train_examples, cv_examples, test_examples;
   ReadData(&train_examples, &cv_examples, &test_examples);
 
-  // 显示数据集信息
-  printf("Dataset Information:\n");
-  printf("Training samples: %zu\n", train_examples.size());
-  printf("Cross-validation samples: %zu\n", cv_examples.size());
-  printf("Test samples: %zu\n", test_examples.size());
-  if (!train_examples.empty()) {
-    printf("Number of features: %zu\n", train_examples[0].values.size());
-  }
-  printf("Parameters: tree_depth=%d, num_iter=%d, beta=%g, lambda=%g\n\n",
-         FLAGS_tree_depth, FLAGS_num_iter, FLAGS_beta, FLAGS_lambda);
-
   Model model;
   for (int iter = 1; iter <= FLAGS_num_iter; ++iter) {
-    auto iter_start = std::chrono::high_resolution_clock::now();
-    
     AddTreeToModel(train_examples, &model);
-    
-    auto iter_end = std::chrono::high_resolution_clock::now();
-    auto iter_duration = std::chrono::duration_cast<std::chrono::milliseconds>(iter_end - iter_start);
-    
     // TODO(usyed): Evaluating every iteration might be very expensive. Add an
     // option to evaluate every K iterations, where K is a command-line
     // parameter.
@@ -108,22 +78,8 @@ int main(int argc, char** argv) {
                   &num_trees);
     EvaluateModel(test_examples, model, &test_error, &avg_tree_size,
                   &num_trees);
-    
-    long current_memory = getCurrentMemoryUsage();
-    
     printf("Iteration: %d, test error: %g, cv error: %g, "
-           "avg tree size: %g, num trees: %d, time: %ldms, memory: %ldKB\n",
-           iter, test_error, cv_error, avg_tree_size, num_trees, 
-           iter_duration.count(), current_memory);
+           "avg tree size: %g, num trees: %d\n",
+           iter, test_error, cv_error, avg_tree_size, num_trees);
   }
-
-  // 总结信息
-  auto end_time = std::chrono::high_resolution_clock::now();
-  auto total_duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
-  long final_memory = getCurrentMemoryUsage();
-  
-  printf("\nTraining Summary:\n");
-  printf("Total training time: %ldms (%.2fs)\n", total_duration.count(), total_duration.count() / 1000.0);
-  printf("Memory usage: %ldKB (%.2fMB)\n", final_memory, final_memory / 1024.0);
-  printf("Memory increase: %ldKB\n", final_memory - initial_memory);
 }
