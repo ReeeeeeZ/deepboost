@@ -47,11 +47,18 @@ bool ParseLineOcr17Princeton(const string& line, Example* example);
 
 bool ParseLinePima(const string& line, Example* example);
 
+bool ParseLineAdult(const string& line, Example* example);
+
 bool ParseLineMnist(const string& line, Example* example);
 
 // Read data set into training set, cross-validation set and test set.
 void ReadData(vector<Example>* train_examples,
               vector<Example>* cv_examples,
               vector<Example>* test_examples);
+
+void ReadDataStandardSplit(vector<Example>* train_examples,
+                          vector<Example>* test_examples,
+                          const string& train_file,
+                          const string& test_file);
 
 #endif  // IO_H_

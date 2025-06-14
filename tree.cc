@@ -16,22 +16,17 @@ limitations under the License.
 
 #include <math.h>
 #include <iostream>  // 放在文件顶部 if not already included
-#include <numeric> 
+
 #include "tree.h"
-#include <random>
-#include <algorithm>
+
 #include "gflags/gflags.h"
 #include "glog/logging.h"
 
-DEFINE_double(beta, 5e-5, "beta parameter for gradient.");
-DEFINE_double(lambda, 5e-6, "lambda parameter for gradient.");
-DEFINE_int32(tree_depth, 4,
+DEFINE_double(beta, 1e-6, "beta parameter for gradient.");
+DEFINE_double(lambda, 1e-7, "lambda parameter for gradient.");
+DEFINE_int32(tree_depth, 3,
              "Maximum depth of each decision tree. The root node has depth 0. "
              "Required: tree_depth >= 0.");
-// 添加特征采样参数
-DEFINE_int32(max_features_per_split, 200,
-             "Maximum number of features to consider per split. "
-             "Set to 0 to use all features. Useful for high-dimensional data.");
 
 // TODO(usyed): Global variables are bad style.
 static int num_features;
@@ -143,29 +138,8 @@ Tree TrainTree(const vector<Example>& examples) {
     Feature best_split_feature;
     Value best_split_value;
     float best_delta_gradient = 0;
-    
-    // 特征采样：对于高维数据，只考虑部分特征
-    vector<Feature> features_to_consider;
-    if (FLAGS_max_features_per_split > 0 && 
-        FLAGS_max_features_per_split < num_features) {
-      // 随机选择特征子集
-      vector<Feature> all_features(num_features);
-      std::iota(all_features.begin(), all_features.end(), 0);
-      
-      static std::random_device rd;
-      static std::mt19937 gen(rd());
-      std::shuffle(all_features.begin(), all_features.end(), gen);
-      
-      features_to_consider.assign(all_features.begin(), 
-                                 all_features.begin() + FLAGS_max_features_per_split);
-    } else {
-      // 使用所有特征
-      features_to_consider.resize(num_features);
-      std::iota(features_to_consider.begin(), features_to_consider.end(), 0);
-    }
-    
-    // 在选定的特征中寻找最佳分裂
-    for (Feature split_feature : features_to_consider) {
+    for (Feature split_feature = 0; split_feature < num_features;
+         ++split_feature) {
       const map<Value, pair<Weight, Weight>> value_to_weights =
           MakeValueToWeightsMap(node, split_feature);
       Value split_value;
@@ -178,8 +152,6 @@ Tree TrainTree(const vector<Example>& examples) {
         best_split_value = split_value;
       }
     }
-
-
     if (node.depth < FLAGS_tree_depth && best_delta_gradient > kTolerance) {
       MakeChildNodes(best_split_feature, best_split_value, &node, &tree);
     }

@@ -1,3 +1,29 @@
 Code for DeepBoost algorithm described in:
 
 Corinna Cortes, Mehryar Mohri, Umar Syed (2014) "Deep Boosting", ICML 2014
+
+# DeepBoost Algorithm Implementation v1
+## Overview
+This repository contains an implementation of the DeepBoost algorithm for binary classification tasks, with experimental validation on the Adult income dataset.
+
+## Performance Highlights
+- **Best Accuracy**: 86.42% (vs. FSS Naive Bayes 85.95%)
+- **Error Rate**: 13.58% (outperforms all benchmarks)
+- **Training Speed**: 4-11 seconds depending on configuration
+
+## Quick Start
+```bash
+# Compile
+make driver
+
+# Run with best configuration
+./driver \
+  --data_filename=./testdata/adult/adult.data \
+  --num_iter=100 \
+  --tree_depth=3 \
+  --num_folds=5 \
+  --fold_to_cv=0 \
+  --fold_to_test=1 \
+  --beta=1e-6 \
+  --lambda=1e-7 \
+  --seed=42

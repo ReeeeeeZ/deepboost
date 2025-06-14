@@ -23,10 +23,10 @@ limitations under the License.
 #include "gflags/gflags.h"
 #include "glog/logging.h"
 
-DEFINE_string(data_set, "mnist17",
-              "Name of data set. Required: One of breastcancer, wpbc, mnist17, ionosphere, "
+DEFINE_string(data_set, "adult",
+              "Name of data set. Required: One of adult, breastcancer, wpbc, ionosphere, "
               "ocr17, ocr49, ocr17-mnist, ocr49-mnist, diabetes, german.");
-DEFINE_string(data_filename, "./testdata/mnist_1_vs_7.data",
+DEFINE_string(data_filename, "./testdata/adult/adult.data",
               "Filename containing data. Required: data_filename not empty.");
 DEFINE_int32(num_folds, 5,
              "(num_folds - 2)/num_folds of data used for training, 1/num_folds "
@@ -270,40 +270,229 @@ bool ParseLinePima(const string& line, Example* example) {
   return true;
 }
 
-// 在io.cc中添加ParseLineMnist函数
-bool ParseLineMnist(const string& line, Example* example) {
+bool ParseLineAdult(const string& line, Example* example) {
   example->values.clear();
   vector<string> values;
   SplitString(line, ',', &values);
   
-  // 检查数据格式：应该有785列（784特征 + 1标签）
-  if (values.size() != 785) {
-    LOG(WARNING) << "Invalid MNIST line format, expected 785 values, got " 
-                 << values.size();
+  if (values.size() != 15) {
+    return false; // 期望15列（14个特征 + 1个标签）
+  }
+  
+  // 去除首尾空格的辅助函数
+  auto trim = [](string& str) {
+    str.erase(0, str.find_first_not_of(" \t"));
+    str.erase(str.find_last_not_of(" \t") + 1);
+  };
+  
+  // 去除所有值的首尾空格
+  for (string& value : values) {
+    trim(value);
+  }
+  
+  // 检查是否有缺失值
+  for (const string& value : values) {
+    if (value == "?" || value.empty()) {
+      return false; // 跳过包含缺失值的样本
+    }
+  }
+  
+  try {
+    // ========== 数值特征（标准化处理） ==========
+    
+    // 年龄 (索引0) - 标准化到合理范围
+    float age = atof(values[0].c_str());
+    example->values.push_back(age / 100.0);
+    
+    // fnlwgt (索引2) - 对数变换后标准化
+    float fnlwgt = atof(values[2].c_str());
+    example->values.push_back(log(fnlwgt + 1) / 20.0);
+    
+    // 教育年限 (索引4) - 标准化
+    float education_num = atof(values[4].c_str());
+    example->values.push_back(education_num / 20.0);
+    
+    // 资本收益 (索引10) - 对数变换后标准化
+    float capital_gain = atof(values[10].c_str());
+    example->values.push_back(log(capital_gain + 1) / 15.0);
+    
+    // 资本损失 (索引11) - 对数变换后标准化
+    float capital_loss = atof(values[11].c_str());
+    example->values.push_back(log(capital_loss + 1) / 15.0);
+    
+    // 每周工作小时 (索引12) - 标准化
+    float hours_per_week = atof(values[12].c_str());
+    example->values.push_back(hours_per_week / 100.0);
+    
+    // ========== 分类特征（编码处理） ==========
+    
+    // 工作类别 (索引1)
+    const string& workclass = values[1];
+    if (workclass == "Private") {
+      example->values.push_back(1.0);
+    } else if (workclass == "Self-emp-not-inc") {
+      example->values.push_back(2.0);
+    } else if (workclass == "Self-emp-inc") {
+      example->values.push_back(3.0);
+    } else if (workclass == "Federal-gov") {
+      example->values.push_back(4.0);
+    } else if (workclass == "Local-gov") {
+      example->values.push_back(5.0);
+    } else if (workclass == "State-gov") {
+      example->values.push_back(6.0);
+    } else if (workclass == "Without-pay") {
+      example->values.push_back(7.0);
+    } else if (workclass == "Never-worked") {
+      example->values.push_back(8.0);
+    } else {
+      example->values.push_back(0.0); // 未知类别
+    }
+    
+    // 教育程度 (索引3) - 按教育水平编码
+    const string& education = values[3];
+    if (education == "Preschool") {
+      example->values.push_back(1.0);
+    } else if (education == "1st-4th") {
+      example->values.push_back(2.0);
+    } else if (education == "5th-6th") {
+      example->values.push_back(3.0);
+    } else if (education == "7th-8th") {
+      example->values.push_back(4.0);
+    } else if (education == "9th") {
+      example->values.push_back(5.0);
+    } else if (education == "10th") {
+      example->values.push_back(6.0);
+    } else if (education == "11th") {
+      example->values.push_back(7.0);
+    } else if (education == "12th") {
+      example->values.push_back(8.0);
+    } else if (education == "HS-grad") {
+      example->values.push_back(9.0);
+    } else if (education == "Some-college") {
+      example->values.push_back(10.0);
+    } else if (education == "Assoc-voc") {
+      example->values.push_back(11.0);
+    } else if (education == "Assoc-acdm") {
+      example->values.push_back(12.0);
+    } else if (education == "Bachelors") {
+      example->values.push_back(13.0);
+    } else if (education == "Masters") {
+      example->values.push_back(14.0);
+    } else if (education == "Prof-school") {
+      example->values.push_back(15.0);
+    } else if (education == "Doctorate") {
+      example->values.push_back(16.0);
+    } else {
+      example->values.push_back(0.0); // 未知类别
+    }
+    
+    // 婚姻状况 (索引5) - 简化为已婚/未婚
+    const string& marital_status = values[5];
+    if (marital_status == "Married-civ-spouse" || 
+        marital_status == "Married-AF-spouse" ||
+        marital_status == "Married-spouse-absent") {
+      example->values.push_back(1.0); // 已婚
+    } else {
+      example->values.push_back(0.0); // 未婚
+    }
+    
+    // 职业 (索引6) - 按技能水平编码
+    const string& occupation = values[6];
+    if (occupation == "Prof-specialty") {
+      example->values.push_back(6.0); // 专业技术
+    } else if (occupation == "Exec-managerial") {
+      example->values.push_back(5.0); // 管理层
+    } else if (occupation == "Tech-support") {
+      example->values.push_back(4.0); // 技术支持
+    } else if (occupation == "Sales") {
+      example->values.push_back(3.0); // 销售
+    } else if (occupation == "Adm-clerical") {
+      example->values.push_back(3.0); // 文职
+    } else if (occupation == "Craft-repair") {
+      example->values.push_back(2.0); // 技工
+    } else if (occupation == "Transport-moving") {
+      example->values.push_back(2.0); // 运输
+    } else if (occupation == "Machine-op-inspct") {
+      example->values.push_back(2.0); // 机械操作
+    } else if (occupation == "Other-service") {
+      example->values.push_back(1.0); // 其他服务
+    } else if (occupation == "Handlers-cleaners") {
+      example->values.push_back(1.0); // 清洁工
+    } else if (occupation == "Farming-fishing") {
+      example->values.push_back(1.0); // 农渔业
+    } else if (occupation == "Protective-serv") {
+      example->values.push_back(3.0); // 保护服务
+    } else if (occupation == "Priv-house-serv") {
+      example->values.push_back(1.0); // 家政服务
+    } else if (occupation == "Armed-Forces") {
+      example->values.push_back(4.0); // 军队
+    } else {
+      example->values.push_back(0.0); // 未知职业
+    }
+    
+    // 家庭关系 (索引7)
+    const string& relationship = values[7];
+    if (relationship == "Husband") {
+      example->values.push_back(3.0);
+    } else if (relationship == "Wife") {
+      example->values.push_back(2.0);
+    } else if (relationship == "Own-child") {
+      example->values.push_back(1.0);
+    } else if (relationship == "Not-in-family") {
+      example->values.push_back(0.0);
+    } else if (relationship == "Other-relative") {
+      example->values.push_back(1.0);
+    } else if (relationship == "Unmarried") {
+      example->values.push_back(0.0);
+    } else {
+      example->values.push_back(0.0);
+    }
+    
+    // 种族 (索引8) - 简单编码
+    const string& race = values[8];
+    if (race == "White") {
+      example->values.push_back(1.0);
+    } else if (race == "Black") {
+      example->values.push_back(2.0);
+    } else if (race == "Asian-Pac-Islander") {
+      example->values.push_back(3.0);
+    } else if (race == "Amer-Indian-Eskimo") {
+      example->values.push_back(4.0);
+    } else if (race == "Other") {
+      example->values.push_back(5.0);
+    } else {
+      example->values.push_back(0.0);
+    }
+    
+    // 性别 (索引9)
+    const string& sex = values[9];
+    example->values.push_back(sex == "Male" ? 1.0 : 0.0);
+    
+    // 国家 (索引13) - 简化为美国/非美国
+    const string& native_country = values[13];
+    example->values.push_back(native_country == "United-States" ? 1.0 : 0.0);
+    
+    // ========== 标签处理 ==========
+    
+    // 收入标签 (索引14)
+    const string& income = values[14];
+    if (income == "<=50K") {
+      example->label = -1; // 低收入
+    } else if (income == ">50K") {
+      example->label = +1; // 高收入
+    } else {
+      return false; // 未知标签
+    }
+    
+    return true;
+    
+  } catch (const std::exception& e) {
+    // 捕获任何解析错误
+    return false;
+  } catch (...) {
+    // 捕获其他异常
     return false;
   }
-  
-  // 解析784个特征值（前784列）
-  example->values.reserve(784);
-  for (int i = 0; i < 784; ++i) {
-    float pixel_value = atof(values[i].c_str());
-    // 归一化像素值到[0,1]范围
-    example->values.push_back(pixel_value / 255.0);
-  }
-  
-  // 解析标签（最后一列）
-  int label = atoi(values[784].c_str());
-  if (label == 0) {
-    example->label = -1;  // 数字1 -> -1
-  } else if (label == 1) {
-    example->label = +1;  // 数字7 -> +1
-  } else {
-    LOG(WARNING) << "Invalid label: " << label;
-    return false;
-  }
-  
-  example->weight = 1.0;
-  return true;
 }
 
 void ReadData(vector<Example>* train_examples,
@@ -313,18 +502,34 @@ void ReadData(vector<Example>* train_examples,
   cv_examples->clear();
   test_examples->clear();
   vector<Example> examples;
+  
   std::ifstream file(FLAGS_data_filename);
-  CHECK(file.is_open());
+  CHECK(file.is_open()) << "Cannot open file: " << FLAGS_data_filename;
+  
   string line;
+  int line_count = 0;
+  int parsed_count = 0;
+  int skipped_count = 0;
+  
+  LOG(INFO) << "Reading data from: " << FLAGS_data_filename;
+  LOG(INFO) << "Dataset: " << FLAGS_data_set;
+  
   while (!std::getline(file, line).eof()) {
+    line_count++;
+    
+    // 跳过空行
+    if (line.empty()) {
+      skipped_count++;
+      continue;
+    }
+    
     Example example;
     bool keep_example;
+    
     if (FLAGS_data_set == "breastcancer") {
       keep_example = ParseLineBreastCancer(line, &example);
-    } else if (FLAGS_data_set == "wpbc") {  // 添加这个分支
+    } else if (FLAGS_data_set == "wpbc") {
       keep_example = ParseLineWpbc(line, &example);
-    } else if (FLAGS_data_set == "mnist17") {  // 新添加
-      keep_example = ParseLineMnist(line, &example);
     } else if (FLAGS_data_set == "ionosphere") {
       keep_example = ParseLineIon(line, &example);
     } else if (FLAGS_data_set == "german") {
@@ -339,15 +544,56 @@ void ReadData(vector<Example>* train_examples,
       keep_example = ParseLineOcr49Princeton(line, &example);
     } else if (FLAGS_data_set == "diabetes") {
       keep_example = ParseLinePima(line, &example);
+    } else if (FLAGS_data_set == "adult") {
+      keep_example = ParseLineAdult(line, &example);
     } else {
       LOG(FATAL) << "Unknown data set: " << FLAGS_data_set;
     }
-    if (keep_example) examples.push_back(example);
+    
+    if (keep_example) {
+      examples.push_back(example);
+      parsed_count++;
+    } else {
+      skipped_count++;
+    }
+    
+    // 每10000行输出一次进度
+    if (line_count % 10000 == 0) {
+      LOG(INFO) << "Processed " << line_count << " lines, parsed " << parsed_count << " examples";
+    }
   }
+  
+  LOG(INFO) << "=== Data Reading Summary ===";
+  LOG(INFO) << "Total lines read: " << line_count;
+  LOG(INFO) << "Successfully parsed: " << parsed_count;
+  LOG(INFO) << "Skipped (empty/invalid): " << skipped_count;
+  LOG(INFO) << "Parse success rate: " << (100.0 * parsed_count / line_count) << "%";
+  
+  if (examples.empty()) {
+    LOG(FATAL) << "No examples were parsed from the data file!";
+  }
+  
+  // 输出特征数量信息
+  if (!examples.empty()) {
+    LOG(INFO) << "Features per example: " << examples[0].values.size();
+    
+    // 统计标签分布
+    int positive_count = 0, negative_count = 0;
+    for (const Example& ex : examples) {
+      if (ex.label == 1) positive_count++;
+      else if (ex.label == -1) negative_count++;
+    }
+    LOG(INFO) << "Label distribution - Positive: " << positive_count 
+              << " (" << (100.0 * positive_count / examples.size()) << "%), "
+              << "Negative: " << negative_count 
+              << " (" << (100.0 * negative_count / examples.size()) << "%)";
+  }
+  
+  // 原有的数据分割逻辑保持不变
   std::shuffle(examples.begin(), examples.end(), rng);
   std::uniform_real_distribution<double> dist;
   int fold = 0;
-  // TODO(usyed): Two loops is inefficient
+  
   for (Example& example : examples) {
     double r = dist(rng);
     if (r < FLAGS_noise_prob) {
@@ -363,40 +609,102 @@ void ReadData(vector<Example>* train_examples,
     ++fold;
     if (fold == FLAGS_num_folds) fold = 0;
   }
+  
+  
   const float initial_wgt = 1.0 / train_examples->size();
-  // TODO(usyed): Three loops is _really_ inefficient
   for (Example& example : *train_examples) {
     example.weight = initial_wgt;
   }
-
-  // 在return;之前添加这些代码
-  LOG(INFO) << "Dataset statistics:";
-  LOG(INFO) << "Train: " << train_examples->size() << " examples";
-  LOG(INFO) << "CV: " << cv_examples->size() << " examples";
-  LOG(INFO) << "Test: " << test_examples->size() << " examples";
   
-  if (!train_examples->empty()) {
-    LOG(INFO) << "Feature dimension: " << (*train_examples)[0].values.size();
-    
-    // 统计标签分布
-    int train_pos = 0, train_neg = 0;
-    int cv_pos = 0, cv_neg = 0;
-    int test_pos = 0, test_neg = 0;
-    
-    for (const auto& ex : *train_examples) {
-      if (ex.label == 1) train_pos++; else train_neg++;
-    }
-    for (const auto& ex : *cv_examples) {
-      if (ex.label == 1) cv_pos++; else cv_neg++;
-    }
-    for (const auto& ex : *test_examples) {
-      if (ex.label == 1) test_pos++; else test_neg++;
-    }
-    
-    LOG(INFO) << "Label distribution - Train: +" << train_pos << " / -" << train_neg;
-    LOG(INFO) << "Label distribution - CV: +" << cv_pos << " / -" << cv_neg;
-    LOG(INFO) << "Label distribution - Test: +" << test_pos << " / -" << test_neg;
-  }
-
+  LOG(INFO) << "=== Data Split Summary ===";
+  LOG(INFO) << "Training examples: " << train_examples->size();
+  LOG(INFO) << "CV examples: " << cv_examples->size();
+  LOG(INFO) << "Test examples: " << test_examples->size();
+  LOG(INFO) << "===========================";
+  
   return;
+}
+
+void ReadDataStandardSplit(vector<Example>* train_examples,
+                          vector<Example>* test_examples,
+                          const string& train_file,
+                          const string& test_file) {
+  train_examples->clear();
+  test_examples->clear();
+  
+  // 读取训练数据
+  std::ifstream train_file_stream(train_file);
+  CHECK(train_file_stream.is_open()) << "Cannot open train file: " << train_file;
+  
+  string line;
+  int train_total = 0, train_parsed = 0, train_skipped = 0;
+  
+  LOG(INFO) << "Reading training data from: " << train_file;
+  while (!std::getline(train_file_stream, line).eof()) {
+    train_total++;
+    if (line.empty()) {
+      train_skipped++;
+      continue;
+    }
+    
+    Example example;
+    if (ParseLineAdult(line, &example)) {
+      train_examples->push_back(example);
+      train_parsed++;
+    } else {
+      train_skipped++;
+    }
+    
+    // 每10000行输出一次进度
+    if (train_total % 10000 == 0) {
+      LOG(INFO) << "Train: processed " << train_total << " lines, parsed " << train_parsed << " examples";
+    }
+  }
+  
+  // 读取测试数据
+  std::ifstream test_file_stream(test_file);
+  CHECK(test_file_stream.is_open()) << "Cannot open test file: " << test_file;
+  
+  int test_total = 0, test_parsed = 0, test_skipped = 0;
+  
+  LOG(INFO) << "Reading test data from: " << test_file;
+  while (!std::getline(test_file_stream, line).eof()) {
+    test_total++;
+    if (line.empty()) {
+      test_skipped++;
+      continue;
+    }
+    
+    Example example;
+    if (ParseLineAdult(line, &example)) {
+      test_examples->push_back(example);
+      test_parsed++;
+    } else {
+      test_skipped++;
+    }
+    
+    // 每5000行输出一次进度
+    if (test_total % 5000 == 0) {
+      LOG(INFO) << "Test: processed " << test_total << " lines, parsed " << test_parsed << " examples";
+    }
+  }
+  
+  LOG(INFO) << "=== Standard Split Data Summary ===";
+  LOG(INFO) << "Training - Total: " << train_total << ", Parsed: " << train_parsed << ", Skipped: " << train_skipped;
+  LOG(INFO) << "Test - Total: " << test_total << ", Parsed: " << test_parsed << ", Skipped: " << test_skipped;
+  LOG(INFO) << "Train success rate: " << (100.0 * train_parsed / train_total) << "%";
+  LOG(INFO) << "Test success rate: " << (100.0 * test_parsed / test_total) << "%";
+  
+  // 设置训练样本权重
+  const float initial_wgt = 1.0 / train_examples->size();
+  for (Example& example : *train_examples) {
+    example.weight = initial_wgt;
+  }
+  
+  // 输出特征和标签统计（修正后的代码）
+  if (!train_examples->empty()) {
+    LOG(INFO) << "Features per example: " << (*train_examples)[0].values.size();
+  }
+  
+  LOG(INFO) << "===================================";
 }
