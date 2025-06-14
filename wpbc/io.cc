@@ -23,15 +23,10 @@ limitations under the License.
 #include "gflags/gflags.h"
 #include "glog/logging.h"
 
-#include <map>
-
-static vector<float> feature_means;
-static bool stats_computed = false;
-
-DEFINE_string(data_set, "wdbc",
-              "Name of data set. Required: One of breastcancer, wdbc, ionosphere, "
+DEFINE_string(data_set, "wpbc",
+              "Name of data set. Required: One of breastcancer, wpbc, ionosphere, "
               "ocr17, ocr49, ocr17-mnist, ocr49-mnist, diabetes, german.");
-DEFINE_string(data_filename, "./testdata/breast-cancer-wisconsin/wdbc.data",
+DEFINE_string(data_filename, "./testdata/breast-cancer-wisconsin/wpbc.data",
               "Filename containing data. Required: data_filename not empty.");
 DEFINE_int32(num_folds, 5,
              "(num_folds - 2)/num_folds of data used for training, 1/num_folds "
@@ -66,51 +61,6 @@ void SplitString(const string &text, char sep, vector<string>* tokens) {
   }
 }
 
-// 计算特征统计信息的函数
-void ComputeFeatureStats(const string& filename) {
-  if (stats_computed) return;
-  
-  // 先确定特征数量
-  std::ifstream file(filename);
-  CHECK(file.is_open()) << "Cannot open file: " << filename;
-  
-  string first_line;
-  std::getline(file, first_line);
-  vector<string> first_values;
-  SplitString(first_line, ',', &first_values);
-  
-  int num_features = first_values.size() - 2; // 减去ID和标签列
-  feature_means.assign(num_features, 0.0);
-  vector<int> feature_counts(num_features, 0);
-  
-  // 重新读取文件计算均值
-  file.clear();
-  file.seekg(0, std::ios::beg);
-  
-  string line;
-  while (std::getline(file, line)) {
-    vector<string> values;
-    SplitString(line, ',', &values);
-    
-    for (int i = 2; i < values.size() && i-2 < num_features; ++i) {
-      if (values[i] != "?" && !values[i].empty()) {
-        feature_means[i-2] += atof(values[i].c_str());
-        feature_counts[i-2]++;
-      }
-    }
-  }
-  
-  // 计算均值
-  for (int i = 0; i < num_features; ++i) {
-    if (feature_counts[i] > 0) {
-      feature_means[i] /= feature_counts[i];
-    }
-  }
-  
-  stats_computed = true;
-  LOG(INFO) << "Computed statistics for " << num_features << " features";
-}
-
 bool ParseLineBreastCancer(const string& line, Example* example) {
   example->values.clear();
   vector<string> values;
@@ -143,7 +93,7 @@ bool ParseLineBreastCancer(const string& line, Example* example) {
   return true;
 }
 
-bool ParseLineWdbc(const string& line, Example* example) {
+bool ParseLineWpbc(const string& line, Example* example) {
   example->values.clear();
   vector<string> values;
   SplitString(line, ',', &values);
@@ -152,18 +102,22 @@ bool ParseLineWdbc(const string& line, Example* example) {
     if (i == 0) {
       continue;  // 跳过ID列
     } else if (i == 1) {
-      // 第二列是标签：B = benign(-1), M = malignant(+1)
-      if (values[i] == "B") {  // Benign
+      // 第二列是标签：N = benign(-1), R = malignant(+1)
+      if (values[i] == "N") {  // No recurrence (benign)
         example->label = -1;
-      } else if (values[i] == "M") {  // Malignant
+      } else if (values[i] == "R") {  // Recurrence (malignant)
         example->label = +1;
       } else {
         LOG(FATAL) << "Unexpected label: " << values[i];
       }
     } else {
-      // 第3-32列是特征（注意：WDBC没有缺失值）
-      float value = atof(values[i].c_str());
-      example->values.push_back(value);
+      // 第3-32列是特征，但需要检查缺失值
+      if (values[i] == "?" || values[i].empty()) {
+        return false;  // 跳过包含缺失值的样本
+      } else {
+        float value = atof(values[i].c_str());
+        example->values.push_back(value);
+      }
     }
   }
   return true;
@@ -323,8 +277,6 @@ void ReadData(vector<Example>* train_examples,
   train_examples->clear();
   cv_examples->clear();
   test_examples->clear();
-  
-  
   vector<Example> examples;
   std::ifstream file(FLAGS_data_filename);
   CHECK(file.is_open());
@@ -334,8 +286,8 @@ void ReadData(vector<Example>* train_examples,
     bool keep_example;
     if (FLAGS_data_set == "breastcancer") {
       keep_example = ParseLineBreastCancer(line, &example);
-    } else if (FLAGS_data_set == "wdbc") {
-    keep_example = ParseLineWdbc(line, &example);
+    } else if (FLAGS_data_set == "wpbc") {  // 添加这个分支
+      keep_example = ParseLineWpbc(line, &example);
     } else if (FLAGS_data_set == "ionosphere") {
       keep_example = ParseLineIon(line, &example);
     } else if (FLAGS_data_set == "german") {
@@ -355,10 +307,6 @@ void ReadData(vector<Example>* train_examples,
     }
     if (keep_example) examples.push_back(example);
   }
-  
-  // 打印样本统计信息
-  LOG(INFO) << "Total examples loaded: " << examples.size();
-  
   std::shuffle(examples.begin(), examples.end(), rng);
   std::uniform_real_distribution<double> dist;
   int fold = 0;

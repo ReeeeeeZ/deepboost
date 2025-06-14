@@ -22,8 +22,8 @@ limitations under the License.
 #include "gflags/gflags.h"
 #include "glog/logging.h"
 
-DEFINE_double(beta, 1e-4, "beta parameter for gradient.");
-DEFINE_double(lambda, 1e-5, "lambda parameter for gradient.");
+DEFINE_double(beta, 1e-6, "beta parameter for gradient.");
+DEFINE_double(lambda, 1e-7, "lambda parameter for gradient.");
 DEFINE_int32(tree_depth, 3,
              "Maximum depth of each decision tree. The root node has depth 0. "
              "Required: tree_depth >= 0.");
