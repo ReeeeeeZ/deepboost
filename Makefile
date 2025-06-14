@@ -11,17 +11,17 @@
 #   LIB_DIR/include/gtest contains Google Test include files
 #   LIB_DIR/src contains Google Test source files
 #   LIB_DIR/lib contains libgflags* and libglog* library files.
-LIB_DIR = /usr/local/google/home/usyed/googleopensource
+LIB_DIR = /usr
 
 # Where to find user code.
 USER_DIR = .
 
 # Flags passed to the preprocessor.
-CPPFLAGS += -isystem $(LIB_DIR)/include
+CPPFLAGS += -I$(LIB_DIR)/include
 
 # Flags passed to the C++ compiler. Add -O3 for the highest optimization level.
 # Add -ggdb for GDB debugging info.
-CXXFLAGS += -Wall -Wextra -pthread -std=c++11
+CXXFLAGS += -Wall -Wextra -pthread -std=c++14
 
 # All tests produced by this Makefile.  Remember to add new tests you
 # created to the list.
@@ -45,19 +45,25 @@ clean :
 
 # Usually you shouldn't tweak such internal variables, indicated by a
 # trailing _.
-GTEST_SRCS_ = $(LIB_DIR)/src/*.cc $(LIB_DIR)/src/*.h $(GTEST_HEADERS)
+GTEST_SRC_DIR = /usr/src/gtest
+GTEST_SRCS_ = $(GTEST_SRC_DIR)/src/gtest-all.cc \
+              $(GTEST_SRC_DIR)/src/gtest_main.cc \
+              $(GTEST_HEADERS)
+
 
 # For simplicity and to avoid depending on Google Test's
 # implementation details, the dependencies specified below are
 # conservative and not optimized.  This is fine as Google Test
 # compiles fast and for ordinary users its source rarely changes.
 gtest-all.o : $(GTEST_SRCS_)
-	$(CXX) $(CPPFLAGS) -I$(LIB_DIR) $(CXXFLAGS) -c \
-            $(LIB_DIR)/src/gtest-all.cc
+	$(CXX) $(CPPFLAGS) -I$(LIB_DIR)/include -I$(GTEST_SRC_DIR) $(CXXFLAGS) -c \
+            $(GTEST_SRC_DIR)/src/gtest-all.cc
+
 
 gtest_main.o : $(GTEST_SRCS_)
-	$(CXX) $(CPPFLAGS) -I$(LIB_DIR) $(CXXFLAGS) -c \
-            $(LIB_DIR)/src/gtest_main.cc
+	$(CXX) $(CPPFLAGS) -I$(LIB_DIR)/include -I$(GTEST_SRC_DIR) $(CXXFLAGS) -c \
+            $(GTEST_SRC_DIR)/src/gtest_main.cc
+
 
 gtest_main.a : gtest-all.o gtest_main.o
 	$(AR) $(ARFLAGS) $@ $^
@@ -72,7 +78,7 @@ tree_test.o : $(USER_DIR)/tree_test.cc \
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $(USER_DIR)/tree_test.cc
 
 tree_test : tree.o tree_test.o gtest_main.a
-	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -static -lpthread $^ -o $@ -L$(LIB_DIR)/lib -lgflags -lglog
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS)  -lpthread $^ -o $@ -L$(LIB_DIR)/lib -lgflags -lglog
 
 boost.o : $(USER_DIR)/boost.cc $(USER_DIR)/boost.h $(GTEST_HEADERS)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $(USER_DIR)/boost.cc
@@ -82,7 +88,7 @@ boost_test.o : $(USER_DIR)/boost_test.cc \
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $(USER_DIR)/boost_test.cc
 
 boost_test : tree.o boost.o boost_test.o gtest_main.a
-	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -static -lpthread $^ -o $@ -L$(LIB_DIR)/lib -lgflags -lglog
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS)  -lpthread $^ -o $@ -L$(LIB_DIR)/lib -lgflags -lglog
 
 io.o : $(USER_DIR)/io.cc $(USER_DIR)/io.h $(GTEST_HEADERS)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $(USER_DIR)/io.cc
@@ -92,7 +98,7 @@ io_test.o : $(USER_DIR)/io_test.cc \
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $(USER_DIR)/io_test.cc
 
 io_test : tree.o io.o io_test.o gtest_main.a
-	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -static -lpthread $^ -o $@ -L$(LIB_DIR)/lib -lgflags -lglog
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -lpthread $^ -o $@ -L$(LIB_DIR)/lib -lgflags -lglog
 
 # Build the main executable
 
@@ -100,4 +106,4 @@ driver.o : $(USER_DIR)/driver.cc
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $(USER_DIR)/driver.cc
 
 driver : tree.o boost.o io.o driver.o
-	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -static -lpthread $^ -o $@ -L$(LIB_DIR)/lib -lgflags -lglog
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -lpthread $^ -o $@ -L$(LIB_DIR)/lib -lgflags -lglog

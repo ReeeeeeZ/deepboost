@@ -1,0 +1,5 @@
+Log file created at: 2025/06/10 15:30:32
+Running on machine: LAPTOP-1QO4USG4
+Running duration (h:mm:ss): 0:00:00
+Log line format: [IWEF]yyyymmdd hh:mm:ss.uuuuuu threadid file:line] msg
+I20250610 15:30:32.156123  7307 test_glog.cpp:8] Test message!

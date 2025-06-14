@@ -26,7 +26,7 @@ using std::vector;
 
 // Used in many places as the minimum possible difference between two distinct
 // numbers. Helps make code stable, tests predictable, etc.
-static const float kTolerance = 1e-7;
+static const float kTolerance = 1e-6;
 
 typedef int Feature;
 typedef int Label;
